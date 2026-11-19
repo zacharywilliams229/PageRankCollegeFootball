@@ -1,6 +1,7 @@
 
 import argparse
 import csv
+import json
 from pathlib import Path
 
 import requests
@@ -18,7 +19,11 @@ FBS_GROUP_ID = "80"
 NOTRE_DAME_ID = "87"
 
 
-def fetch_json(url, params=None):
+def fetch_json(url, params=None, cache_path=None):
+    if cache_path is not None and cache_path.exists():
+        with cache_path.open(encoding="utf-8") as file:
+            return json.load(file)
+
     response = requests.get(
         url,
         params=params,
@@ -27,11 +32,18 @@ def fetch_json(url, params=None):
     )
 
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+
+    if cache_path is not None:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with cache_path.open("w", encoding="utf-8") as file:
+            json.dump(data, file, indent=2)
+
+    return data
 
 
-def load_conferences():
-    data = fetch_json(GROUPS_URL)
+def load_conferences(cache_path=None):
+    data = fetch_json(GROUPS_URL, cache_path=cache_path)
     conferences = {}
 
     def process(groups):
@@ -151,9 +163,11 @@ def load_conference_champion_ids(games_path, season):
     return champion_ids
 
 
-def create_metadata(season, output_path):
+def create_metadata(season, output_path, games_path=None, cache_dir=None):
     print("Fetching conference information...")
-    conferences = load_conferences()
+    conferences = load_conferences(
+        cache_dir / "conferences.json" if cache_dir else None
+    )
 
     print("Fetching FBS teams from ESPN...")
 
@@ -163,6 +177,7 @@ def create_metadata(season, output_path):
             "limit": 1000,
             "groups": FBS_GROUP_ID,
         },
+        cache_path=cache_dir / "fbs_teams.json" if cache_dir else None,
     )
 
     teams = find_team_records(data)
@@ -176,7 +191,7 @@ def create_metadata(season, output_path):
             "ESPN returned no recognizable team records."
         )
 
-    games_path = Path("data") / f"{season}_games.csv"
+    games_path = games_path or Path("data") / f"{season}_games.csv"
     conference_champion_ids = load_conference_champion_ids(
         games_path,
         season,

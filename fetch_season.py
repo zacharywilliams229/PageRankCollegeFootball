@@ -253,19 +253,20 @@ def fetch_season(year, refresh=False):
     return list(games.values())
 
 
-def save_games(year, games):
+def save_games(year, games, output_dir=None):
     """Save normalized JSON and convenient CSV output."""
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir = output_dir or OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     games.sort(key=lambda g: (g["date"] or "", g["event_id"]))
 
-    json_file = OUTPUT_DIR / f"{year}_games.json"
+    json_file = output_dir / f"{year}_games.json"
 
     with json_file.open("w") as f:
         json.dump(games, f, indent=2)
 
-    csv_file = OUTPUT_DIR / f"{year}_games.csv"
+    csv_file = output_dir / f"{year}_games.csv"
 
     columns = [
         "event_id",
