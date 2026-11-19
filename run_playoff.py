@@ -55,6 +55,7 @@ def run_playoff(
             metadata_csv,
             games_path=games_csv,
             cache_dir=cache_dir,
+            raw_cache_dir=DATA_DIR / "raw_cache",
         )
 
         rankings = load_rankings(rankings_csv)

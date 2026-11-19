@@ -79,16 +79,70 @@ def load_metadata(path):
     return metadata
 
 
+def get_projected_conference_winners(eligible):
+    """Return up to five winners, with unique conferences."""
+    winners = []
+    represented_conferences = set()
+
+    # Declared champions retain priority, ordered by team rank.
+    champions = [
+        team for team in eligible
+        if team["is_champion"]
+    ]
+    champions.sort(key=lambda team: team["rank"])
+
+    for team in champions:
+        conference = team["conference"].strip()
+        if conference and conference not in represented_conferences:
+            winners.append(team)
+            represented_conferences.add(conference)
+
+        if len(winners) == 5:
+            break
+
+    # When fewer than five champions are known, project the highest-ranked
+    # team from each conference that is not already represented.
+    conferences = {
+        team["conference"].strip()
+        for team in eligible
+        if team["conference"].strip()
+    }
+
+    remaining = [
+        conference for conference in conferences
+        if conference not in represented_conferences
+    ]
+    remaining.sort(key=lambda conference: min(
+        team["rank"] for team in eligible
+        if team["conference"].strip() == conference
+    ))
+
+    for conference in remaining:
+        conference_teams = [
+            team for team in eligible
+            if team["conference"].strip() == conference
+        ]
+        projected = min(conference_teams, key=lambda team: team["rank"])
+        if len(winners) == 5:
+            break
+        winners.append(projected)
+        represented_conferences.add(conference)
+
+    return sorted(winners, key=lambda team: team["rank"])
+
+
 def build_playoff_field(rankings, metadata, playoff_format):
     """
     Select the 12 playoff teams.
 
     five-champs:
-        Five highest-ranked FBS conference champions qualify.
+        Five highest-ranked FBS conference winners qualify. If a conference
+        has no declared champion, its highest-ranked team is projected.
         Next seven highest-ranked teams fill the remaining spots.
 
     2026:
-        ACC, Big Ten, Big 12, and SEC champions qualify.
+        ACC, Big Ten, Big 12, and SEC winners qualify. Missing conference
+        champions are projected as each conference's highest-ranked team.
         Highest-ranked Group of Six team qualifies.
         Notre Dame qualifies if ranked in the top 12.
         Remaining spots go to the highest-ranked teams.
@@ -116,18 +170,9 @@ def build_playoff_field(rankings, metadata, playoff_format):
     eligible.sort(key=lambda team: team["rank"])
 
     if playoff_format == "five-champs":
-        champions = [
-            team for team in eligible
-            if team["is_champion"]
-        ]
-
-        if len(champions) < 5:
-            raise ValueError(
-                f"Only {len(champions)} conference champions found. "
-                "Five are required."
-            )
-
-        automatic_qualifiers = champions[:5]
+        automatic_qualifiers = get_projected_conference_winners(
+            eligible
+        )[:5]
 
     elif playoff_format == "2026":
         automatic_qualifiers = []
@@ -141,11 +186,20 @@ def build_playoff_field(rankings, metadata, playoff_format):
             ]
 
             if not champions:
-                raise ValueError(
-                    f"No champion found for {conference}."
-                )
+                conference_teams = [
+                    team for team in eligible
+                    if team["conference"] == conference
+                ]
+                if not conference_teams:
+                    raise ValueError(
+                        f"No teams found for {conference}."
+                    )
+                champions = conference_teams
 
-            automatic_qualifiers.append(champions[0])
+            automatic_qualifiers.append(min(
+                champions,
+                key=lambda team: team["rank"],
+            ))
 
         # Highest-ranked Group of Six team, champion or not.
         group_of_six = [

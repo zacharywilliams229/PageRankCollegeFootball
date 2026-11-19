@@ -18,6 +18,19 @@ GROUPS_URL = f"{BASE_URL}/groups"
 FBS_GROUP_ID = "80"
 NOTRE_DAME_ID = "87"
 
+ESPN_CONFERENCE_NAMES = {
+    "151": "American",
+    "1": "ACC",
+    "4": "Big 12",
+    "5": "Big Ten",
+    "12": "Conference USA",
+    "15": "MAC",
+    "17": "Mountain West",
+    "9": "Pac-12",
+    "8": "SEC",
+    "37": "Sun Belt",
+}
+
 
 def fetch_json(url, params=None, cache_path=None):
     if cache_path is not None and cache_path.exists():
@@ -104,6 +117,7 @@ def find_team_records(data):
 
 def get_conference(team, conferences):
     groups = team.get("groups", {})
+    group_id = ""
 
     if isinstance(groups, dict):
         group_id = str(groups.get("id", ""))
@@ -128,7 +142,51 @@ def get_conference(team, conferences):
             if group_id in conferences:
                 return conferences[group_id]
 
+    if group_id in ESPN_CONFERENCE_NAMES:
+        return ESPN_CONFERENCE_NAMES[group_id]
+
     return ""
+
+
+def load_team_conferences(raw_cache_dir):
+    team_conferences = {}
+
+    if not raw_cache_dir or not raw_cache_dir.exists():
+        return team_conferences
+
+    for cache_path in raw_cache_dir.glob("*_type*_week*.json"):
+        try:
+            with cache_path.open(encoding="utf-8") as file:
+                data = json.load(file)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        def find_team_records(obj):
+            if isinstance(obj, dict):
+                team = obj.get("team")
+                if isinstance(team, dict):
+                    team_id = str(team.get("id", "")).strip()
+                    conference_id = str(
+                        team.get("conferenceId", "")
+                    ).strip()
+                    if (
+                        team_id
+                        and conference_id
+                        and conference_id in ESPN_CONFERENCE_NAMES
+                    ):
+                        team_conferences[team_id] = (
+                            ESPN_CONFERENCE_NAMES[conference_id]
+                        )
+
+                for value in obj.values():
+                    find_team_records(value)
+            elif isinstance(obj, list):
+                for value in obj:
+                    find_team_records(value)
+
+        find_team_records(data)
+
+    return team_conferences
 
 
 def load_conference_champion_ids(games_path, season):
@@ -154,16 +212,16 @@ def load_conference_champion_ids(games_path, season):
                 if winner_id:
                     champion_ids.add(winner_id)
 
-    if not champion_ids:
-        raise RuntimeError(
-            f"No conference champions found in {games_path}. "
-            "The games CSV must contain is_championship_game=True rows."
-        )
-
     return champion_ids
 
 
-def create_metadata(season, output_path, games_path=None, cache_dir=None):
+def create_metadata(
+    season,
+    output_path,
+    games_path=None,
+    cache_dir=None,
+    raw_cache_dir=None,
+):
     print("Fetching conference information...")
     conferences = load_conferences(
         cache_dir / "conferences.json" if cache_dir else None
@@ -196,6 +254,7 @@ def create_metadata(season, output_path, games_path=None, cache_dir=None):
         games_path,
         season,
     )
+    team_conferences = load_team_conferences(raw_cache_dir)
 
     metadata = []
 
@@ -206,7 +265,10 @@ def create_metadata(season, output_path, games_path=None, cache_dir=None):
         metadata.append({
             "team_id": team_id,
             "team_name": team_name,
-            "conference": get_conference(team, conferences),
+            "conference": (
+                get_conference(team, conferences)
+                or team_conferences.get(team_id, "")
+            ),
             "is_fbs": "true",
             "is_conference_champion": str(
                 team_id in conference_champion_ids
