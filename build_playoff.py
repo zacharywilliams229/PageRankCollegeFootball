@@ -209,6 +209,22 @@ def build_playoff_field(rankings, metadata, playoff_format):
     return selected
 
 
+def get_first_four_out(rankings, metadata, playoff_teams):
+    """Return the four highest-ranked eligible teams left outside the field."""
+    selected_ids = {team["team_id"] for team in playoff_teams}
+    eligible = [
+        {
+            **team,
+            **metadata[team_id],
+        }
+        for team_id, team in rankings.items()
+        if team_id in metadata
+        and metadata[team_id]["is_fbs"]
+        and team_id not in selected_ids
+    ]
+    return sorted(eligible, key=lambda team: team["rank"])[:4]
+
+
 def print_bracket(teams):
     by_seed = {team["seed"]: team for team in teams}
 

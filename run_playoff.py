@@ -8,6 +8,7 @@ import fetch_season as season_fetch
 from build_graph import build_win_graph, save_graph
 from build_playoff import (
     build_playoff_field,
+    get_first_four_out,
     load_metadata,
     load_rankings,
     save_playoff_field,
@@ -56,15 +57,14 @@ def run_playoff(
             cache_dir=cache_dir,
         )
 
-        playoff_teams = build_playoff_field(
-            load_rankings(rankings_csv),
-            load_metadata(metadata_csv),
-            playoff_format,
-        )
+        rankings = load_rankings(rankings_csv)
+        metadata = load_metadata(metadata_csv)
+        playoff_teams = build_playoff_field(rankings, metadata, playoff_format)
         save_playoff_field(playoff_teams, playoff_csv)
         draw_playoff_bracket(
             load_playoff_field(playoff_csv),
             output_path,
+            get_first_four_out(rankings, metadata, playoff_teams),
         )
 
 

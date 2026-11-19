@@ -94,7 +94,11 @@ def connect(axis, start_x: float, start_y: float, end_x: float, end_y: float):
     )
 
 
-def draw_playoff_bracket(teams: list[dict[str, str]], output_path: Path):
+def draw_playoff_bracket(
+    teams: list[dict[str, str]],
+    output_path: Path,
+    first_four_out: list[dict[str, str]] | None = None,
+):
     """Render a 12-team CFP bracket with first-round byes."""
     by_seed = {int(team["seed"]): team for team in teams}
     figure, axis = plt.subplots(figsize=(19, 10), facecolor=BACKGROUND)
@@ -191,6 +195,27 @@ def draw_playoff_bracket(teams: list[dict[str, str]], output_path: Path):
     draw_card(axis, columns["champ"], 4.75, {"seed": "NC", "rank": "winner", "name": "National Champion"})
     connect(axis, columns["champ"] + 1.23, 4.75, columns["winner"] - 1.23, 4.75)
     draw_card(axis, columns["winner"], 4.75, {"seed": "★", "rank": "—", "name": "Champion"}, width=2.2)
+
+    if first_four_out:
+        axis.text(
+            15.15,
+            9.05,
+            "FIRST FOUR OUT",
+            color=MUTED,
+            fontsize=8,
+            fontweight="bold",
+            ha="center",
+        )
+        for index, team in enumerate(first_four_out, start=1):
+            axis.text(
+                14.45,
+                8.6 - (index - 1) * 0.42,
+                f"{index}. {team['name']}  (PageRank #{team['rank']})",
+                color=TEXT,
+                fontsize=7.2,
+                ha="left",
+                va="center",
+            )
 
     axis.text(
         0.42,
